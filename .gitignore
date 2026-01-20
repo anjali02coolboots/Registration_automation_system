@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Sensitive files
+credentials.json
+token.pickle
+credentials_store.py
+
+# Excel files (except lookup)
+*.xlsx
+!Source_TG_Latest.xlsx
+
+# Exports
+exports/
+*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
