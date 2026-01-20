@@ -45,13 +45,11 @@ jobs:
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           # Add any other secrets your scripts need
         run: |
-          cd "Report 4"
           python app.py
       
       - name: Check for changes in Registration_Template.xlsx
         id: check_changes
         run: |
-          cd "Report 4"
           if git diff --quiet Registration_Template.xlsx; then
             echo "changed=false" >> $GITHUB_OUTPUT
             echo "No changes detected in Registration_Template.xlsx"
@@ -63,7 +61,6 @@ jobs:
       - name: Commit and push updated Registration_Template.xlsx
         if: steps.check_changes.outputs.changed == 'true'
         run: |
-          cd "Report 4"
           git add Registration_Template.xlsx
           
           # Get yesterday's date for commit message
@@ -91,8 +88,8 @@ jobs:
         with:
           name: report-outputs
           path: |
-            Report 4/exports/
-            Report 4/Registration_Template.xlsx
+            exports/
+            Registration_Template.xlsx
           retention-days: 7
       
       - name: Notify on failure
