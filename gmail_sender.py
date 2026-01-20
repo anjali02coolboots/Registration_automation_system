@@ -5,12 +5,10 @@ from io import BytesIO
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
-from email.mime.base import MIMEBase
-from email import encoders
 
 import pandas as pd
 import openpyxl
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import PatternFill
 from PIL import Image, ImageDraw, ImageFont
 
 from google.auth.transport.requests import Request
@@ -34,12 +32,23 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.send']
 
 
 # =========================
-# CROSS-PLATFORM EXCEL TO IMAGE
+# CROSS-PLATFORM EXCEL TO IMAGE (IMPROVED)
 # =========================
+def hex_to_rgb(hex_color):
+    """Convert hex color to RGB tuple"""
+    if hex_color.startswith('#'):
+        hex_color = hex_color[1:]
+    if len(hex_color) == 8:  # ARGB format
+        hex_color = hex_color[2:]  # Remove alpha channel
+    if len(hex_color) == 6:
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return (255, 255, 255)  # Default to white
+
+
 def excel_to_image_cross_platform(excel_path, sheet_name):
     """
-    Convert Excel sheet to PNG image (cross-platform version)
-    Uses openpyxl to read data and PIL to create image
+    Convert Excel sheet to PNG image with proper styling
+    Improved version with better color handling and clarity
     """
     print(f"📂 Opening Excel file: {excel_path}")
     
@@ -57,69 +66,125 @@ def excel_to_image_cross_platform(excel_path, sheet_name):
     max_row = ws.max_row
     max_col = ws.max_column
     
-    # Read data into list
+    print(f"📊 Processing {max_row} rows × {max_col} columns")
+    
+    # Read data and styles
     data = []
-    for row in ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
-        data.append([str(cell.value) if cell.value is not None else '' for cell in row])
+    styles = []
     
-    # Calculate image dimensions
-    cell_width = 120
-    cell_height = 35
-    padding = 10
+    for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col), 1):
+        row_data = []
+        row_styles = []
+        
+        for col_idx, cell in enumerate(row, 1):
+            # Get cell value
+            value = str(cell.value) if cell.value is not None else ''
+            row_data.append(value)
+            
+            # Get cell style
+            cell_style = {
+                'bold': cell.font.bold if cell.font else False,
+                'bg_color': (255, 255, 255)  # Default white background
+            }
+            
+            # Get background color
+            if cell.fill and cell.fill.start_color:
+                if hasattr(cell.fill.start_color, 'rgb'):
+                    rgb_value = cell.fill.start_color.rgb
+                    if rgb_value and rgb_value != '00000000':
+                        cell_style['bg_color'] = hex_to_rgb(rgb_value)
+            
+            row_styles.append(cell_style)
+        
+        data.append(row_data)
+        styles.append(row_styles)
     
-    img_width = max_col * cell_width + padding * 2
+    # Calculate image dimensions (larger for better clarity)
+    cell_width = 150  # Increased from 120
+    cell_height = 40  # Increased from 35
+    padding = 15
+    
+    # Calculate column widths based on content
+    col_widths = []
+    for col_idx in range(max_col):
+        max_length = 0
+        for row_data in data:
+            if col_idx < len(row_data):
+                max_length = max(max_length, len(str(row_data[col_idx])))
+        
+        # First column (Source) wider, others based on content
+        if col_idx == 0:
+            col_widths.append(max(200, max_length * 10))
+        else:
+            col_widths.append(max(120, max_length * 10))
+    
+    img_width = sum(col_widths) + padding * 2
     img_height = max_row * cell_height + padding * 2
     
-    # Create image
+    print(f"🖼️ Creating image: {img_width}x{img_height} pixels")
+    
+    # Create image with white background
     img = Image.new('RGB', (img_width, img_height), color='white')
     draw = ImageDraw.Draw(img)
     
-    # Try to use a better font, fall back to default if not available
+    # Try to use better fonts
     try:
-        font = ImageFont.truetype("arial.ttf", 12)
-        font_bold = ImageFont.truetype("arialbd.ttf", 12)
+        # Try different font paths for different systems
+        font_regular = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        font_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
     except:
-        font = ImageFont.load_default()
-        font_bold = font
+        try:
+            font_regular = ImageFont.truetype("arial.ttf", 14)
+            font_bold = ImageFont.truetype("arialbd.ttf", 14)
+        except:
+            print("⚠️ Using default font (may have lower quality)")
+            font_regular = ImageFont.load_default()
+            font_bold = font_regular
     
     # Draw cells
-    for row_idx, row_data in enumerate(data):
-        for col_idx, cell_value in enumerate(row_data):
-            x = col_idx * cell_width + padding
-            y = row_idx * cell_height + padding
+    y_offset = padding
+    for row_idx, (row_data, row_style) in enumerate(zip(data, styles)):
+        x_offset = padding
+        
+        for col_idx, (cell_value, cell_style) in enumerate(zip(row_data, row_style)):
+            col_width = col_widths[col_idx]
             
-            # Get cell style from Excel
-            excel_cell = ws.cell(row=row_idx + 1, column=col_idx + 1)
+            # Draw cell background
+            bg_color = cell_style['bg_color']
+            draw.rectangle(
+                [x_offset, y_offset, x_offset + col_width, y_offset + cell_height],
+                fill=bg_color,
+                outline='black',
+                width=1
+            )
             
-            # Background color
-            fill = excel_cell.fill
-            if fill and fill.start_color and fill.start_color.rgb:
-                rgb = fill.start_color.rgb
-                if len(rgb) == 8:  # ARGB format
-                    rgb = rgb[2:]  # Remove alpha
-                bg_color = f'#{rgb}'
-                draw.rectangle([x, y, x + cell_width, y + cell_height], 
-                             fill=bg_color, outline='black', width=1)
-            else:
-                draw.rectangle([x, y, x + cell_width, y + cell_height], 
-                             fill='white', outline='black', width=1)
+            # Choose font (bold or regular)
+            current_font = font_bold if cell_style['bold'] else font_regular
             
-            # Text
-            is_bold = excel_cell.font and excel_cell.font.bold
-            current_font = font_bold if is_bold else font
+            # Calculate text position (centered)
+            try:
+                bbox = draw.textbbox((0, 0), cell_value, font=current_font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+            except:
+                # Fallback for older PIL versions
+                text_width = len(cell_value) * 8
+                text_height = 14
             
-            # Center text in cell
-            text_bbox = draw.textbbox((0, 0), cell_value, font=current_font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
+            # Center text horizontally and vertically
+            text_x = x_offset + (col_width - text_width) / 2
+            text_y = y_offset + (cell_height - text_height) / 2
             
-            text_x = x + (cell_width - text_width) / 2
-            text_y = y + (cell_height - text_height) / 2
-            
+            # Draw text in black
             draw.text((text_x, text_y), cell_value, fill='black', font=current_font)
+            
+            x_offset += col_width
+        
+        y_offset += cell_height
     
     wb.close()
-    print(f"✅ Excel sheet '{sheet_name}' converted to image")
+    print(f"✅ Excel sheet '{sheet_name}' converted to image successfully")
+    
     return img
 
 
@@ -168,9 +233,9 @@ def create_message_with_attachment(sender, to, subject, body_text, img):
     msg_body = MIMEText(body_text, 'plain')
     message.attach(msg_body)
 
-    # Convert PIL Image to bytes
+    # Convert PIL Image to bytes with high quality
     img_byte_arr = BytesIO()
-    img.save(img_byte_arr, format='PNG')
+    img.save(img_byte_arr, format='PNG', optimize=False, quality=100)
     img_byte_arr = img_byte_arr.getvalue()
 
     image_attachment = MIMEImage(img_byte_arr, name='registration_template.png')
