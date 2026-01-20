@@ -1,0 +1,68 @@
+name: Daily Registration Report
+
+on:
+  schedule:
+    # Runs at 4:30 AM UTC = 10:00 AM IST (UTC+5:30)
+    - cron: '30 4 * * *'
+  
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+jobs:
+  generate-and-send-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Install Playwright browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+      
+      - name: Create exports directory
+        run: mkdir -p exports
+      
+      - name: Decode Gmail credentials from secrets
+        env:
+          GMAIL_CREDENTIALS_BASE64: ${{ secrets.GMAIL_CREDENTIALS }}
+          GMAIL_TOKEN_BASE64: ${{ secrets.GMAIL_TOKEN }}
+        run: |
+          echo "$GMAIL_CREDENTIALS_BASE64" | base64 -d > credentials.json
+          echo "$GMAIL_TOKEN_BASE64" | base64 -d > token.pickle
+      
+      - name: Run automation workflow
+        env:
+          TECHGIG_USERNAME: ${{ secrets.TECHGIG_USERNAME }}
+          TECHGIG_PASSWORD: ${{ secrets.TECHGIG_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        run: |
+          python app.py
+      
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-outputs
+          path: |
+            exports/
+            *.xlsx
+            *.log
+          retention-days: 7
+      
+      - name: Clean up sensitive files
+        if: always()
+        run: |
+          rm -f credentials.json
+          rm -f token.pickle
