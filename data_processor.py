@@ -61,33 +61,57 @@ df['New Source'] = df['New Source'].fillna('')
 print(f"Saving processed file to {output_path}...")
 df.to_excel(output_path, index=False, engine='openpyxl')
 
-# Now append to Registration_Template.xlsx
+# Now append to Registration_Template.xlsx with duplicate detection
 print(f"\nAppending data to {template_path}...")
 
 if os.path.exists(template_path):
-    # File exists, append data below existing data
-    print("Template file exists. Appending new data...")
+    # File exists, check for duplicates before appending
+    print("Template file exists. Checking for duplicates...")
     
     # Read existing data
     existing_df = pd.read_excel(template_path, engine='openpyxl')
     
+    # Check if data for this date already exists
+    existing_dates = existing_df['Date'].astype(str).unique() if 'Date' in existing_df.columns else []
+    
+    if yesterday_str in existing_dates:
+        print(f"⚠️  WARNING: Data for {yesterday_str} already exists in template!")
+        print(f"   Existing rows for this date: {len(existing_df[existing_df['Date'].astype(str) == yesterday_str])}")
+        print(f"   New rows to add: {len(df)}")
+        
+        # Remove existing data for this date
+        print(f"   Removing old data for {yesterday_str} and replacing with new data...")
+        existing_df = existing_df[existing_df['Date'].astype(str) != yesterday_str]
+        print(f"   ✓ Old data removed. Rows remaining: {len(existing_df)}")
+    
     # Combine existing data with new data
     combined_df = pd.concat([existing_df, df], ignore_index=True)
     
+    # Sort by date (newest first)
+    try:
+        combined_df['Date_Parsed'] = pd.to_datetime(combined_df['Date'], format='%d-%m-%Y', errors='coerce')
+        combined_df = combined_df.sort_values('Date_Parsed', ascending=False)
+        combined_df = combined_df.drop(columns=['Date_Parsed'])
+    except:
+        print("   Note: Could not sort by date, keeping insertion order")
+    
     # Save combined data
     combined_df.to_excel(template_path, index=False, engine='openpyxl')
-    print(f"Appended {len(df)} rows to existing {len(existing_df)} rows")
-    print(f"Total rows in template: {len(combined_df)}")
+    print(f"✓ Appended {len(df)} rows")
+    print(f"✓ Total rows in template: {len(combined_df)}")
     
 else:
     # File doesn't exist, create new file with current data
     print("Template file doesn't exist. Creating new file...")
     df.to_excel(template_path, index=False, engine='openpyxl')
-    print(f"Created new template file with {len(df)} rows")
+    print(f"✓ Created new template file with {len(df)} rows")
 
-print("\nProcessing complete!")
+print("\n" + "="*60)
+print("PROCESSING COMPLETE!")
+print("="*60)
 print(f"Date processed: {yesterday_str}")
-print(f"Intermediate output saved to: {output_path}")
-print(f"Final template saved to: {template_path}")
+print(f"Intermediate output: {output_path}")
+print(f"Final template: {template_path}")
 print("\nFirst few rows of today's processed data:")
 print(df.head())
+print("="*60)
