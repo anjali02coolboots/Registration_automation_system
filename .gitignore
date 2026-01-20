@@ -1,99 +1,26 @@
-name: Daily Registration Report
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
 
-on:
-  schedule:
-    # Run every day at 2:00 AM UTC (adjust timezone as needed)
-    - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+# Sensitive files
+credentials.json
+token.pickle
 
-jobs:
-  generate-report:
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write  # Required to commit changes back to repo
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for proper git operations
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas openpyxl playwright pillow google-auth-oauthlib google-auth-httplib2 google-api-python-client
-          playwright install chromium
-          playwright install-deps
-      
-      - name: Configure Git
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-      
-      - name: Pull latest changes
-        run: |
-          git pull origin main --rebase || true
-      
-      - name: Run automation script
-        env:
-          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-          # Add any other secrets your scripts need
-        run: |
-          python app.py
-      
-      - name: Check for changes in Registration_Template.xlsx
-        id: check_changes
-        run: |
-          if git diff --quiet Registration_Template.xlsx; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes detected in Registration_Template.xlsx"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in Registration_Template.xlsx"
-          fi
-      
-      - name: Commit and push updated Registration_Template.xlsx
-        if: steps.check_changes.outputs.changed == 'true'
-        run: |
-          git add Registration_Template.xlsx
-          
-          # Get yesterday's date for commit message
-          YESTERDAY=$(python -c "from datetime import datetime, timedelta; print((datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'))")
-          
-          git commit -m "📊 Update registration data for $YESTERDAY" \
-                     -m "Automated update from GitHub Actions" \
-                     -m "Run ID: ${{ github.run_id }}"
-          
-          # Push with retry logic
-          for i in {1..5}; do
-            if git push origin main; then
-              echo "✓ Successfully pushed changes"
-              break
-            else
-              echo "Push failed, attempt $i/5. Retrying in 5 seconds..."
-              sleep 5
-              git pull origin main --rebase
-            fi
-          done
-      
-      - name: Upload artifacts (for debugging)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-outputs
-          path: |
-            exports/
-            Registration_Template.xlsx
-          retention-days: 7
-      
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ Workflow failed! Check the logs for details."
-          echo "Run ID: ${{ github.run_id }}"
+# Excel files (except lookup)
+*.xlsx
+!Source_TG_Latest.xlsx
+!Registration_Template.xlsx
+
+# Exports
+exports/
+*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
