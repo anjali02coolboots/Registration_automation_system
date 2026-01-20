@@ -11,11 +11,11 @@ ENV/
 # Sensitive files
 credentials.json
 token.pickle
-credentials_store.py
 
 # Excel files (except lookup)
 *.xlsx
 !Source_TG_Latest.xlsx
+!Registration_Template.xlsx
 
 # Exports
 exports/
