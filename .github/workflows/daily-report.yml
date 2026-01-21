@@ -31,6 +31,11 @@ jobs:
           playwright install chromium
           playwright install-deps
       
+      - name: Create Gmail credentials files from secrets
+        run: |
+          echo '${{ secrets.GMAIL_CREDENTIALS }}' > credentials.json
+          echo '${{ secrets.GMAIL_TOKEN }}' | base64 -d > token.pickle
+      
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions Bot"
@@ -84,6 +89,11 @@ jobs:
               git pull origin main --rebase
             fi
           done
+      
+      - name: Clean up credentials
+        if: always()
+        run: |
+          rm -f credentials.json token.pickle
       
       - name: Upload artifacts (for debugging)
         if: always()
