@@ -16,12 +16,32 @@ def generate_excel_template(input_file):
         # Read the input data
         df = pd.read_excel(input_file)
         
-        # Convert Date column to datetime
+        # Check for duplicate dates
+        print("\n[DUPLICATE CHECK] Analyzing data for duplicate dates...")
         df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y', errors='coerce')
+        
+        # Count rows per date
+        date_counts = df['Date'].value_counts().sort_index(ascending=False)
+        
+        # Check for duplicates
+        duplicate_dates = date_counts[date_counts > 1]
+        if len(duplicate_dates) > 0:
+            print(f"⚠️  WARNING: Found duplicate data for {len(duplicate_dates)} date(s):")
+            for date, count in duplicate_dates.items():
+                print(f"   - {date.strftime('%d-%m-%Y')}: {count} entries")
+            
+            print("\n[DEDUPLICATION] This shouldn't happen with the updated data_processor.py")
+            print("                If you see this, the duplicate detection in data_processor.py may need attention.")
+        else:
+            print("✓ No duplicate dates found - data is clean!")
         
         # Get min and max dates
         min_date = df['Date'].min()
         max_date = df['Date'].max()
+        
+        print(f"\n[DATE RANGE] Processing data from {min_date.strftime('%d-%m-%Y')} to {max_date.strftime('%d-%m-%Y')}")
+        print(f"[DATE RANGE] Total unique dates: {df['Date'].nunique()}")
+        print(f"[DATE RANGE] Total rows: {len(df)}")
         
         # Generate all dates in the range
         date_range = pd.date_range(start=min_date, end=max_date, freq='D')
@@ -135,10 +155,15 @@ def generate_excel_template(input_file):
         # Save the workbook (overwrites the original file)
         wb.save(input_file)
         
-        print(f"✓ Template sheet created successfully in: {input_file}")
+        print("\n" + "="*60)
+        print("TEMPLATE GENERATION COMPLETE!")
+        print("="*60)
+        print(f"✓ Template sheet created: {input_file}")
         print(f"✓ Date range: {min_date.strftime('%m-%d-%Y')} to {max_date.strftime('%m-%d-%Y')}")
         print(f"✓ Total sources: {len(all_sources)}")
         print(f"✓ Total registrations: {len(df)}")
+        print(f"✓ Unique dates processed: {df['Date'].nunique()}")
+        print("="*60)
         
         return input_file
         
@@ -147,6 +172,8 @@ def generate_excel_template(input_file):
         return None
     except Exception as e:
         print(f"✗ Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -162,5 +189,5 @@ if __name__ == "__main__":
         print(f"Current directory: {os.getcwd()}")
         print("\nPlease ensure the file is in the same directory as the script:")
         print("  Report 4/")
-        print("    ├── 3_generate_template.py")
+        print("    ├── generate_template.py")
         print("    └── Registration_Template.xlsx")
