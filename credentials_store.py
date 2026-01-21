@@ -4,10 +4,8 @@ import os
 # Priority: Environment variables > Hardcoded values
 # This allows GitHub Actions to use secrets
 
-# TECHGIG_USERNAME = os.getenv('TECHGIG_USERNAME', 'your_username_here')
-# TECHGIG_PASSWORD = os.getenv('TECHGIG_PASSWORD', 'your_password_here')
-TECHGIG_USERNAME = "devteam"
-TECHGIG_PASSWORD = "tgmis@14"
+TECHGIG_USERNAME = os.getenv('TECHGIG_USERNAME', 'your_username_here')
+TECHGIG_PASSWORD = os.getenv('TECHGIG_PASSWORD', 'your_password_here')
 
 # ================= TECHGIG URLS =================
 LOGIN_URL = "https://www.techgig.com/mis/link.php"
