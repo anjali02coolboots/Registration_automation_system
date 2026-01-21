@@ -2,98 +2,86 @@ name: Daily Registration Report
 
 on:
   schedule:
-    # Run every day at 2:00 AM UTC (adjust timezone as needed)
-    - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+    # Runs at 4:30 AM UTC = 10:00 AM IST (UTC+5:30)
+    - cron: '30 4 * * *'
+  
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
 
 jobs:
-  generate-report:
+  generate-and-send-report:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write  # Required to commit changes back to repo
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for proper git operations
       
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
       
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas openpyxl playwright pillow google-auth-oauthlib google-auth-httplib2 google-api-python-client
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Install Playwright browsers
+        run: |
           playwright install chromium
-          playwright install-deps
+          # Install dependencies manually to avoid libasound2 issue on Ubuntu 24.04
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 \
+            libnspr4 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libdbus-1-3 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libasound2t64 \
+            libatspi2.0-0
       
-      - name: Configure Git
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
+      - name: Create exports directory
+        run: mkdir -p exports
       
-      - name: Pull latest changes
-        run: |
-          git pull origin main --rebase || true
-      
-      - name: Run automation script
+      - name: Decode Gmail credentials from secrets
         env:
+          GMAIL_CREDENTIALS_BASE64: ${{ secrets.GMAIL_CREDENTIALS }}
+          GMAIL_TOKEN_BASE64: ${{ secrets.GMAIL_TOKEN }}
+        run: |
+          echo "$GMAIL_CREDENTIALS_BASE64" | base64 -d > credentials.json
+          echo "$GMAIL_TOKEN_BASE64" | base64 -d > token.pickle
+      
+      - name: Run automation workflow
+        env:
+          TECHGIG_USERNAME: ${{ secrets.TECHGIG_USERNAME }}
+          TECHGIG_PASSWORD: ${{ secrets.TECHGIG_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-          # Add any other secrets your scripts need
         run: |
           python app.py
       
-      - name: Check for changes in Registration_Template.xlsx
-        id: check_changes
-        run: |
-          if git diff --quiet Registration_Template.xlsx; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "No changes detected in Registration_Template.xlsx"
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in Registration_Template.xlsx"
-          fi
-      
-      - name: Commit and push updated Registration_Template.xlsx
-        if: steps.check_changes.outputs.changed == 'true'
-        run: |
-          git add Registration_Template.xlsx
-          
-          # Get yesterday's date for commit message
-          YESTERDAY=$(python -c "from datetime import datetime, timedelta; print((datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'))")
-          
-          git commit -m "📊 Update registration data for $YESTERDAY" \
-                     -m "Automated update from GitHub Actions" \
-                     -m "Run ID: ${{ github.run_id }}"
-          
-          # Push with retry logic
-          for i in {1..5}; do
-            if git push origin main; then
-              echo "✓ Successfully pushed changes"
-              break
-            else
-              echo "Push failed, attempt $i/5. Retrying in 5 seconds..."
-              sleep 5
-              git pull origin main --rebase
-            fi
-          done
-      
-      - name: Upload artifacts (for debugging)
-        if: always()
+      - name: Upload artifacts on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: report-outputs-${{ github.run_number }}
+          name: debug-outputs
           path: |
             exports/
-            Registration_Template.xlsx
+            *.xlsx
+            *.log
           retention-days: 7
       
-      - name: Notify on failure
-        if: failure()
+      - name: Clean up sensitive files
+        if: always()
         run: |
-          echo "❌ Workflow failed! Check the logs for details."
-          echo "Run ID: ${{ github.run_id }}"
+          rm -f credentials.json
+          rm -f token.pickle
