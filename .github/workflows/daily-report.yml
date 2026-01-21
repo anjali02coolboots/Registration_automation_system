@@ -42,8 +42,11 @@ jobs:
       
       - name: Run automation script
         env:
+          TECHGIG_USERNAME: ${{ secrets.TECHGIG_USERNAME }}
+          TECHGIG_PASSWORD: ${{ secrets.TECHGIG_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-          # Add any other secrets your scripts need
+          HEADLESS: 'true'
+          NAV_TIMEOUT_MS: '60000'
         run: |
           python app.py
       
